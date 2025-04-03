@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Conversor Texto ⇄ Señal Eléctrica</title>
+    <script src="https://cdn.jsdelivr.net/npm/fft.js@1.0.1/lib/fft.min.js"></script>
+</head>
+<body>
+    <h1>Conversor Texto ⇄ Señal Eléctrica</h1>
+    
+    <!-- Texto → Señal Numérica -->
+    <div>
+        <label for="textoInput">Texto original:</label>
+        <textarea id="textoInput" rows="2" cols="40" placeholder="Escribe aquí..."></textarea>
+        <button onclick="convertirTextoASenial()">Texto → Señal Numérica</button>
+    </div>
+
+    <!-- Señal Numérica -->
+    <div>
+        <label for="senalNumerica">Señal numérica (ASCII):</label>
+        <textarea id="senalNumerica" rows="2" cols="40" readonly></textarea>
+    </div>
+
+    <!-- Señal Eléctrica -->
+    <div>
+        <button onclick="convertirSenialAElectrica()">Generar Señal Eléctrica</button>
+        <canvas id="senalElectricaCanvas" width="800" height="200" style="border:1px solid #000"></canvas>
+    </div>
+
+    <!-- Señal Eléctrica → Señal Numérica -->
+    <div>
+        <button onclick="convertirElectricaASenial()">Señal Eléctrica → Señal Numérica</button>
+        <label for="senalNumerica2">Señal numérica reconstruida:</label>
+        <textarea id="senalNumerica2" rows="2" cols="40" readonly></textarea>
+    </div>
+
+    <!-- Señal Numérica → Texto -->
+    <div>
+        <button onclick="convertirSenialATexto()">Señal Numérica → Texto</button>
+        <label for="textoReconstruido">Texto reconstruido:</label>
+        <textarea id="textoReconstruido" rows="2" cols="40" readonly></textarea>
+    </div>
+
+    <script>
+        const sampleRate = 256; // Frecuencia de muestreo ajustada
+        const samplesPerChar = 256; // Tamaño de FFT ajustado
+        let senialNumerica = [];
+        let senialElectrica = [];
+
+        function convertirTextoASenial() {
+            const texto = document.getElementById('textoInput').value;
+            senialNumerica = Array.from(texto).map(c => c.charCodeAt(0));
+            document.getElementById('senalNumerica').value = senialNumerica.join(', ');
+        }
+
+        function convertirSenialAElectrica() {
+            if (!senialNumerica.length) return alert("Primero convierte texto a señal numérica");
+            
+            senialElectrica = [];
+            senialNumerica.forEach(code => {
+                for (let i = 0; i < samplesPerChar; i++) {
+                    const t = i / sampleRate;
+                    senialElectrica.push(Math.sin(2 * Math.PI * code * t));
+                }
+            });
+            
+            dibujarSenalElectrica();
+        }
+
+        function dibujarSenalElectrica() {
+            const canvas = document.getElementById('senalElectricaCanvas');
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            ctx.beginPath();
+            ctx.moveTo(0, canvas.height / 2);
+            
+            for (let i = 0; i < senialElectrica.length; i++) {
+                const x = i;
+                const y = (senialElectrica[i] + 1) * canvas.height / 2;
+                ctx.lineTo(x, y);
+            }
+            
+            ctx.strokeStyle = 'blue';
+            ctx.stroke();
+        }
+
+        function convertirElectricaASenial() {
+            if (!senialElectrica.length) return alert("Primero genera la señal eléctrica");
+            
+            const nuevaSenial = [];
+            for (let i = 0; i < senialElectrica.length; i += samplesPerChar) {
+                const chunk = senialElectrica.slice(i, i + samplesPerChar);
+                const fft = new FFT.Complex(samplesPerChar, false);
+                const datos = new Float32Array(samplesPerChar * 2);
+                
+                chunk.forEach((v, j) => {
+                    datos[j * 2] = v;
+                    datos[j * 2 + 1] = 0;
+                });
+                
+                fft.transform(datos);
+                
+                let maxMag = 0;
+                let maxFreq = 0;
+                
+                for (let j = 0; j < samplesPerChar / 2; j++) {
+                    const real = datos[j * 2];
+                    const imag = datos[j * 2 + 1];
+                    const mag = Math.sqrt(real ** 2 + imag ** 2);
+                    
+                    if (mag > maxMag) {
+                        maxMag = mag;
+                        maxFreq = j;
+                    }
+                }
+                
+                nuevaSenial.push(maxFreq);
+            }
+            
+            senialNumerica = nuevaSenial;
+            document.getElementById('senalNumerica2').value = senialNumerica.join(', ');
+        }
+
+        function convertirSenialATexto() {
+            if (!senialNumerica.length) return alert("Primero convierte la señal eléctrica a numérica");
+            
+            const texto = senialNumerica.map(code => 
+                code >= 32 && code <= 127 ? String.fromCharCode(code) : '?'
+            ).join('');
+            
+            document.getElementById('textoReconstruido').value = texto;
+        }
+    </script>
+</body>
+</html>
